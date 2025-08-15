@@ -18,26 +18,51 @@ import mlx.core as mx
 
 def parse_qwen_output(raw_output: str) -> dict:
     """
-    Worker for Qwen. It now fully parses the JSON content of tool calls.
+    Worker for Qwen. It now fully parses the JSON content of tool calls
+    and extracts the chain-of-thought from <think> blocks.
     """
-    print(">>> Qwen Worker Called <<<")
+    print(">>> Qwen Worker (with thinking) Called <<<")
+
+    # 1. Use a simple, reliable regex to extract everything between the tags.
     tool_pattern = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
-    
+    think_pattern = re.compile(r"<think>(.*?)</think>", re.DOTALL)
+
+    analysis_content = ""
+    think_match = think_pattern.search(raw_output)
+    if think_match:
+        analysis_content = think_match.group(1).strip()
+
     parsed_tool_calls = []
     for match in tool_pattern.finditer(raw_output):
         tool_content_str = match.group(1).strip()
+
+        # 2. Clean the extracted string in Python.
+        # Check for the Qwen2.5 double-brace format and fix it.
+        if tool_content_str.startswith("{{") and tool_content_str.endswith("}}"):
+            # Slice the string to remove the outer braces, leaving valid JSON.
+            tool_content_str = tool_content_str[1:-1]
+
+        # 3. Now, parse the cleaned string.
         try:
-            # The worker now does the JSON parsing
             parsed_tool_calls.append(tool_content_str)
         except json.JSONDecodeError:
-            print(f"Warning: Could not parse tool content as JSON: {tool_content_str}")
+            logging.warning(f"Could not parse Qwen tool content as JSON: {tool_content_str}")
             continue
 
-    # The final text is the raw output with all tool calls removed
-    final_answer = tool_pattern.sub("", raw_output).strip()
+
+    # 4. Create the clean final answer by removing BOTH blocks
+    # First, remove the thinking block
+    clean_text = think_pattern.sub("", raw_output)
+    # Then, from that result, remove the tool calls
+    final_answer = tool_pattern.sub("", clean_text).strip() if len(parsed_tool_calls) == 0 else "\n\n"
+    
+    logging.debug(f"Analysis: {analysis_content}")
     logging.debug(f"Final Tool Calls: {parsed_tool_calls}")
     logging.debug(f"Final Answer: {final_answer}")
+
+    # 5. Return the complete, standardized dictionary
     return {
+        "analysis": analysis_content,
         "tool_calls": parsed_tool_calls,
         "final_answer": final_answer
     }
