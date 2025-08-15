@@ -42,12 +42,8 @@ def parse_qwen_output(raw_output: str) -> dict:
             # Slice the string to remove the outer braces, leaving valid JSON.
             tool_content_str = tool_content_str[1:-1]
 
-        # 3. Now, parse the cleaned string.
-        try:
-            parsed_tool_calls.append(tool_content_str)
-        except json.JSONDecodeError:
-            logging.warning(f"Could not parse Qwen tool content as JSON: {tool_content_str}")
-            continue
+        # 3. Now, append the cleaned string.
+        parsed_tool_calls.append(tool_content_str)
 
 
     # 4. Create the clean final answer by removing BOTH blocks
